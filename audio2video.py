@@ -132,8 +132,8 @@ Examples:
     # Gemini settings
     parser.add_argument(
         "--gemini-model",
-        default="gemini-2.0-flash",
-        help="Gemini model for scene analysis (default: gemini-2.0-flash)",
+        default="gemini-3.6-flash",
+        help="Gemini model for scene analysis (default: gemini-3.6-flash)",
     )
     parser.add_argument(
         "--gemini-fallback-model",

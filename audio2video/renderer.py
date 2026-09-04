@@ -11,6 +11,7 @@ import os
 import subprocess
 import sys
 import math
+from types import SimpleNamespace
 from typing import Optional
 
 import cv2
@@ -347,7 +348,15 @@ def render_audio_video(
     2. Generate ASS subtitle file from word-level transcript
     3. Mux: B-roll video + subtitles + original audio → final MP4
     """
-    out_w, out_h = _get_render_dims(ratio, render_height)
+    # Compute output dimensions based on ratio
+    ratio_map = {"9:16": (9, 16), "16:9": (16, 9), "1:1": (1, 1), "3:4": (3, 4), "4:5": (4, 5)}
+    w_part, h_part = ratio_map.get(ratio, (16, 9))
+    if _is_vertical_ratio(ratio):
+        out_w = render_height
+        out_h = int(render_height * h_part / w_part)
+    else:
+        out_h = render_height
+        out_w = int(render_height * w_part / h_part)
     fps = 30
     work_dir = os.path.join(os.path.dirname(output_path) or ".", "render_work")
     os.makedirs(work_dir, exist_ok=True)
@@ -383,12 +392,28 @@ def render_audio_video(
         print("   📝 Generating karaoke subtitles...")
         ass_path = os.path.join(work_dir, "subtitles.ass")
 
-        # Prepare fonts
-        from types import SimpleNamespace
+        # Prepare fonts — build a config object with all attributes the subtitle module expects
+        from clipping.config import (
+            DAFTAR_FONT, ASS_ALIGN_916, ASS_MARGIN_916, ASS_FONT_916,
+            SCALE_KATA_KHUSUS_916, ASS_ALIGN_169, ASS_MARGIN_169, ASS_FONT_169,
+            SCALE_KATA_KHUSUS_169, WARNA_KATA_KHUSUS,
+        )
         font_cfg = SimpleNamespace(
             gaya_font_aktif=font_style,
             base_dir=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
             font_dir=os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "custom_fonts"),
+            daftar_font=DAFTAR_FONT,
+            use_advanced_text=False,
+            use_karaoke_effect=True,
+            ass_align_916=ASS_ALIGN_916,
+            ass_margin_916=ASS_MARGIN_916,
+            ass_font_916=ASS_FONT_916,
+            scale_kata_khusus_916=SCALE_KATA_KHUSUS_916,
+            ass_align_169=ASS_ALIGN_169,
+            ass_margin_169=ASS_MARGIN_169,
+            ass_font_169=ASS_FONT_169,
+            scale_kata_khusus_169=SCALE_KATA_KHUSUS_169,
+            warna_kata_khusus=WARNA_KATA_KHUSUS,
         )
         try:
             siapkan_font_tipografi(font_cfg)

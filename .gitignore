@@ -36,3 +36,4 @@ uploads/
 
 # YouTube Tracker local database
 youtube_tracker/*.sqlite3
+test_narration.mp3
