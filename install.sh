@@ -300,31 +300,87 @@ echo "━━━ Step 6/6: Agent skills (optional) ━━━"
 
 if command -v npx &>/dev/null; then
     echo "   npx found — skills can be installed."
+    echo ""
 
-    SKILLS_SCOPE=""
     if prompt_yesno "   Install ClipCast skills for AI agents?" true; then
-        if prompt_yesno "   Install globally (user-level) or project-level?" true; then
-            SKILLS_SCOPE="-g"
-            SCOPE_LABEL="global"
-        else
-            SKILLS_SCOPE=""
-            SCOPE_LABEL="project"
+        # Choose scope: 1) global  2) project
+        SCOPE_CHOICE="1"
+        if ! $NONINTERACTIVE; then
+            echo "   Where should the skills be installed?"
+            echo ""
+            echo "     1) Globally  — available in ALL projects (recommended)"
+            echo "     2) This project only"
+            echo ""
+            printf "   Choose [1-2, default=1]: "
+            read -r scope_answer
+            case "$scope_answer" in
+                2) SCOPE_CHOICE="2" ;;
+                *) SCOPE_CHOICE="1" ;;
+            esac
         fi
 
-        echo "   Installing $SCOPE_LABEL skills..."
-        npx skills add prismosoft/clipcast --all $SKILLS_SCOPE -y 2>&1 || {
-            echo "   ⚠️  Skills installation failed. You can install manually later:"
-            echo "      npx skills add prismosoft/clipcast -g --all -y"
-        }
-        echo "   ✅ Skills installed ($SCOPE_LABEL)"
+        if [ "$SCOPE_CHOICE" = "1" ]; then
+            SCOPE_FLAG="-g"
+            SCOPE_LABEL="global"
+        else
+            SCOPE_FLAG=""
+            SCOPE_LABEL="project"
+        fi
+        echo ""
+
+        # Choose agents
+        AGENTS_CHOICE="1"
+        if ! $NONINTERACTIVE; then
+            echo "   Which agents should get the skills?"
+            echo ""
+            echo "     1) Popular agents  — OpenCode, Claude Code, Cursor, Codex, Windsurf, Gemini CLI, GitHub Copilot"
+            echo "     2) All detected agents (~60, some may fail)"
+            echo "     3) Custom — enter agent names yourself"
+            echo ""
+            printf "   Choose [1-3, default=1]: "
+            read -r agents_answer
+            case "$agents_answer" in
+                2) AGENTS_CHOICE="2" ;;
+                3) AGENTS_CHOICE="3" ;;
+                *) AGENTS_CHOICE="1" ;;
+            esac
+        fi
+        echo ""
+
+        case "$AGENTS_CHOICE" in
+            2)
+                echo "   Installing $SCOPE_LABEL for ALL agents..."
+                npx skills add prismosoft/clipcast --skill '*' --agent '*' $SCOPE_FLAG -y 2>&1 || true
+                ;;
+            3)
+                printf "   Enter agent names (space-separated, e.g. opencode claude-code cursor): "
+                read -r custom_agents
+                if [ -z "$custom_agents" ]; then
+                    echo "   ⚠️  No agents entered, defaulting to popular agents"
+                    echo "   Installing $SCOPE_LABEL for popular agents..."
+                    npx skills add prismosoft/clipcast --skill '*' -a opencode claude-code cursor codex windsurf gemini-cli github-copilot $SCOPE_FLAG -y 2>&1 || true
+                else
+                    echo "   Installing $SCOPE_LABEL for: $custom_agents"
+                    npx skills add prismosoft/clipcast --skill '*' -a $custom_agents $SCOPE_FLAG -y 2>&1 || true
+                fi
+                ;;
+            *)
+                echo "   Installing $SCOPE_LABEL for popular agents..."
+                npx skills add prismosoft/clipcast --skill '*' -a opencode claude-code cursor codex windsurf gemini-cli github-copilot $SCOPE_FLAG -y 2>&1 || true
+                ;;
+        esac
+
+        echo ""
+        echo "   ✅ Skills installation attempted ($SCOPE_LABEL)"
+        echo "   Failed agents (if any) above are harmless — those agents just don't support this mode."
     else
         echo "   Skipped. Install later with:"
-        echo "      npx skills add prismosoft/clipcast -g --all -y"
+        echo "      npx skills add prismosoft/clipcast -g -a opencode claude-code -y"
     fi
 else
     echo "   ⚠️  npx not found — skills installation skipped."
     echo "   Install Node.js to use agent skills: https://nodejs.org"
-    echo "   Then run: npx skills add prismosoft/clipcast -g --all -y"
+    echo "   Then run: npx skills add prismosoft/clipcast -g -a opencode claude-code -y"
 fi
 echo ""
 
