@@ -131,7 +131,7 @@ def _score_by_gemini_visual(
     query: str,
     segment_context: str,
     api_key: str,
-    model: str = "gemini-2.0-flash",
+    model: str = "gemini-3.6-flash",
 ) -> list[tuple[dict, float]]:
     """
     Send video thumbnails to Gemini for visual relevance scoring.
@@ -150,7 +150,7 @@ def _score_by_gemini_visual(
     image_parts = []
     video_indices = []
 
-    for idx, video in enumerate(videos[:10]):
+    for idx, video in enumerate(videos[:20]):
         image_url = video.get("image") or video.get("pictures", {}).get("large", "")
         if not image_url:
             continue
@@ -169,14 +169,28 @@ def _score_by_gemini_visual(
     if not image_parts:
         return [(v, _score_by_metadata(v, query)) for v in videos]
 
-    prompt = f"""You are a visual relevance judge. I will show you {len(image_parts)} stock video thumbnails.
-The search query was: "{query}"
-The audio content for this segment is: "{segment_context}"
+    prompt = f"""You are a strict visual relevance judge for B-roll selection. You will see thumbnails of {len(image_parts)} stock video candidates.
 
-Rate each thumbnail from 1-10 on how well it visually matches the search query and the audio content context.
-10 = perfect visual match, 1 = completely irrelevant.
+SEARCH QUERY: "{query}"
+AUDIO CONTEXT (what the audience is hearing): "{segment_context}"
 
-Return a JSON object: {{"scores": [score1, score2, ...]}} where each score corresponds to the thumbnails in order."""
+Your job: rate each candidate 1-10 on how well its VISUAL CONTENT matches the query AND the audio context.
+
+SCORING RULES — be strict:
+- 10: The footage could have been shot FOR this content. Location, people, mood, era all match.
+- 7-9: Strong match. Clear topical and geographic/cultural alignment.
+- 4-6: Topically related but with visible mismatches (wrong country, wrong demographic, wrong mood).
+- 1-3: Weak or irrelevant match.
+
+AUTOMATIC LOW SCORES (1-3) if the candidate:
+- Shows recognizable flags, landmarks, or signage from the WRONG country or region (e.g., Turkish flag in content about Lebanon)
+- Shows people whose evident ethnicity/demographic clearly mismatches the content's setting (e.g., East Asian dancers for a Middle Eastern song)
+- Shows modern technology, fashion, or vehicles in a historical piece (or vice versa)
+- Has a mood that contradicts the audio (e.g., festive party footage for tragic content)
+
+Geographic and cultural accuracy matters MORE than generic topical relevance. A "beautiful city street" is NOT a match for "Beirut" if it clearly looks like Tokyo.
+
+Return JSON: {{"scores": [score1, score2, ...]}} — one score per candidate, in order."""
 
     config = gtypes.GenerateContentConfig(
         response_mime_type="application/json",
@@ -222,15 +236,18 @@ def search_pexels_with_scoring(
     ratio: str,
     pexels_api_key: str,
     segment_context: str = "",
-    strict: bool = False,
+    strict: bool = True,
     gemini_api_key: str = "",
-    gemini_model: str = "gemini-2.0-flash",
+    gemini_model: str = "gemini-3.6-flash",
 ) -> Optional[dict]:
     """
     Search Pexels with multiple fallback queries and score results.
 
     Tries each query in order. For each query, searches Pexels and scores results
-    using metadata matching (default) or Gemini visual scoring (strict mode).
+    using Gemini visual scoring (default, when gemini_api_key is provided) or
+    metadata matching (fallback when no key or --broll-fast).
+
+    strict=False (--broll-fast) skips Gemini visual scoring entirely.
 
     Returns the best matching video dict with added 'download_url' and 'score' fields,
     or None if no results found across all queries.
@@ -250,8 +267,8 @@ def search_pexels_with_scoring(
             print(f"      🔄 All results already used, reusing pool")
             available = videos
 
-        if strict and gemini_api_key:
-            print(f"      🎯 Strict mode: scoring {len(available)} videos with Gemini...")
+        if gemini_api_key and strict:
+            print(f"      🎯 Gemini visual scoring: rating {len(available)} candidates...")
             scored = _score_by_gemini_visual(
                 available, query, segment_context, gemini_api_key, gemini_model
             )
@@ -263,10 +280,12 @@ def search_pexels_with_scoring(
             continue
 
         best_video, best_score = scored[0]
-        print(f"      🏆 Best match: score={best_score:.1f}/10")
+        print(f"      🏆 Best match: score={best_score:.1f}/10 — {best_video.get('title', 'untitled')[:60]}")
 
-        if best_score < 2.0 and query_idx < len(queries) - 1:
-            print(f"      ⚠️ Low score, trying next fallback query...")
+        # Quality bar: reject clips Gemini scored below 5 — better to try the next
+        # query than use a culturally/geographically mismatched clip.
+        if best_score < 5.0 and query_idx < len(queries) - 1:
+            print(f"      ⚠️ Below quality bar (<5.0), trying next fallback query...")
             continue
 
         download_url = _get_best_video_file(best_video)

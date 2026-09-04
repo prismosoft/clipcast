@@ -4,7 +4,7 @@ audio2video.py — Transform any audio file into a B-roll video with subtitles.
 
 Usage:
     python audio2video.py --audio "song.mp3" --ratio 9:16
-    python audio2video.py --audio "narration.mp3" --ratio 16:9 --broll-strict
+    python audio2video.py --audio "narration.mp3" --ratio 16:9  # Gemini visual scoring is default
     python audio2video.py --audio "podcast.mp3" --no-broll --no-subs
 
 Input: Any audio file (MP3, WAV, M4A, FLAC, etc.)
@@ -43,7 +43,7 @@ Examples:
   python audio2video.py --audio "song.mp3" --ratio 9:16
 
   # Documentary narration, 16:9, strict B-roll matching
-  python audio2video.py --audio "narration.mp3" --ratio 16:9 --broll-strict
+  python audio2video.py --audio "narration.mp3" --ratio 16:9  # Gemini visual scoring is default
 
   # Podcast clip, no B-roll (just subtitles + dark background)
   python audio2video.py --audio "podcast.mp3" --no-broll
@@ -89,9 +89,10 @@ Examples:
         help="Disable B-roll (use solid color background)",
     )
     parser.add_argument(
-        "--broll-strict",
+        "--broll-fast",
         action="store_true",
-        help="Use Gemini visual scoring for B-roll selection (slower but more accurate)",
+        help="Skip Gemini visual scoring — metadata-only matching (faster, less accurate). "
+             "Default is Gemini visual scoring for best relevance.",
     )
     parser.add_argument(
         "--target-segment-duration",
@@ -187,7 +188,7 @@ Examples:
     print("=" * 60)
     print(f"   📁 Audio: {args.audio}")
     print(f"   📐 Ratio: {args.ratio}")
-    print(f"   🎥 B-roll: {'disabled' if args.no_broll else 'enabled' + (' (strict)' if args.broll_strict else '')}")
+    print(f"   🎥 B-roll: {'disabled' if args.no_broll else 'enabled' + (' (fast/metadata-only)' if args.broll_fast else ' (Gemini visual scoring)')}")
     print(f"   📝 Subtitles: {'disabled' if args.no_subs else 'enabled'}")
     print(f"   🔤 Font: {args.font_style}")
     print(f"   🤖 Gemini: {args.gemini_model}")
@@ -207,7 +208,7 @@ Examples:
             whisper_compute_type=args.whisper_compute_type,
             gemini_model=args.gemini_model,
             gemini_fallback_model=args.gemini_fallback_model,
-            broll_strict=args.broll_strict,
+            broll_strict=not args.broll_fast,
             no_broll=args.no_broll,
             no_subs=args.no_subs,
             target_segment_duration=args.target_segment_duration,

@@ -159,7 +159,7 @@ def fetch_broll_segments(
     segments: list[dict],
     ratio: str,
     pexels_api_key: str,
-    broll_strict: bool = False,
+    broll_strict: bool = True,
     gemini_api_key: str = "",
     gemini_model: str = "gemini-2.0-flash",
     output_dir: str = "outputs",
@@ -167,7 +167,8 @@ def fetch_broll_segments(
     """
     For each scene segment, search Pexels and download the best-matching B-roll.
 
-    Uses metadata scoring by default. With broll_strict=True, also sends
+    Uses Gemini visual scoring by default (when a Gemini key is available).
+    With broll_strict=False, falls back to metadata-only matching (faster).
     video thumbnails to Gemini for visual relevance scoring.
     """
     print("[3/4] Fetching B-roll footage from Pexels...")
@@ -290,7 +291,7 @@ def run_pipeline(
     whisper_compute_type: str = "int8",
     gemini_model: str = "gemini-2.0-flash",
     gemini_fallback_model: str = "gemini-2.5-flash",
-    broll_strict: bool = False,
+    broll_strict: bool = True,
     no_broll: bool = False,
     no_subs: bool = False,
     target_segment_duration: float = 20.0,
