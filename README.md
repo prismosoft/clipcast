@@ -1,23 +1,66 @@
 <br />
 <div align="center">
-  <a href="https://github.com/NaufalRizqullah/opensource-clipping">
+  <a href="https://github.com/prismosoft/clipcast">
     <img src="assets/images/opensource-clipping-logo-editable.svg" alt="Logo" width="350">
   </a>
 
-  <h3 align="center">OpenSource Clipping</h3>
+  <h3 align="center">ClipCast</h3>
 
   <p align="center">
-    <strong>Ultimate AI Auto-Clipper & Teaser Generator</strong><br>
-    An open-source content factory that transforms long-form videos into cinematic short-form highlights with hook teasers, karaoke subtitles, and auto-thumbnails.
+    <strong>AI Auto-Clipper & Audio-to-Video Generator</strong><br>
+    Transform long-form videos into viral short clips, or turn any audio into a B-roll video with subtitles.
     <br />
     <br />
-    <a href="README_ID.md">🇮🇩 Baca dalam Bahasa Indonesia</a>
+    <a href="#-quick-install">Quick Install</a>
     &middot;
-    <a href="https://github.com/NaufalRizqullah/opensource-clipping/issues/new">Report Bug</a>
+    <a href="#-audio2video">Audio2Video</a>
     &middot;
-    <a href="https://github.com/NaufalRizqullah/opensource-clipping/issues/new">Request Feature</a>
+    <a href="#-clipping">Clipping</a>
+    &middot;
+    <a href="https://github.com/prismosoft/clipcast/issues/new">Report Bug</a>
   </p>
 </div>
+
+---
+
+## 🚀 Quick Install
+
+```bash
+git clone https://github.com/prismosoft/clipcast.git
+cd clipcast
+./install.sh
+```
+
+This sets up the Python venv, installs all dependencies, and creates two global commands:
+
+| Command | Purpose |
+|---|---|
+| `clipcast` | Clip long videos into short highlights |
+| `clipcast-audio` | Transform audio files into B-roll videos |
+
+After install, add your API key to `.env`:
+```bash
+# .env — at minimum you need:
+GOOGLE_API_KEY=your-key-here    # https://aistudio.google.com/apikey
+PEXELS_API_KEY=your-key-here   # optional, for B-roll — https://www.pexels.com/api/
+```
+
+## 🎙️ Audio2Video
+
+Turn any audio (song, narration, podcast, voiceover) into a video composed of B-roll stock footage with karaoke subtitles.
+
+```bash
+# Song to vertical video
+clipcast-audio --audio "song.mp3" --ratio 9:16
+
+# Documentary narration with strict B-roll matching
+clipcast-audio --audio "narration.mp3" --ratio 16:9 --broll-strict
+
+# No B-roll, just subtitles
+clipcast-audio --audio "podcast.mp3" --no-broll
+```
+
+## ✂️ Clipping
 
 ---
 
