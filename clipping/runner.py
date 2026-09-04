@@ -70,6 +70,21 @@ def run_pipeline(cfg) -> list[dict]:
                 )
 
     if not transkrip_lengkap or not data_segmen:
+        # Groq API path — used only if GROQ_API_KEY is set in the environment
+        groq_api_key = os.environ.get("GROQ_API_KEY", "")
+        if groq_api_key:
+            try:
+                transkrip_lengkap, data_segmen = engine.transcribe_video_groq(
+                    cfg.file_video_asli,
+                    max_words_per_subtitle=cfg.max_kata_per_subtitle,
+                    api_key=groq_api_key,
+                    model_size=cfg.whisper_model,
+                )
+            except Exception as groq_err:
+                print(f"⚠️ Groq API gagal ({groq_err}). Fallback ke Whisper lokal...")
+                transkrip_lengkap, data_segmen = "", []
+
+    if not transkrip_lengkap or not data_segmen:
         transkrip_lengkap, data_segmen = engine.transcribe_video(
             cfg.file_video_asli,
             max_words_per_subtitle=cfg.max_kata_per_subtitle,

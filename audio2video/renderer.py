@@ -61,14 +61,17 @@ def _get_ffmpeg_path() -> str:
 
 
 def _probe_duration(video_path: str) -> float:
-    """Get video duration using ffprobe."""
+    """Get video duration using ffprobe. Raises if the file is not a readable video."""
     result = subprocess.run(
         ["ffprobe", "-v", "quiet", "-print_format", "json",
          "-show_format", video_path],
         capture_output=True, text=True,
     )
-    data = json.loads(result.stdout)
-    return float(data["format"]["duration"])
+    try:
+        data = json.loads(result.stdout)
+        return float(data["format"]["duration"])
+    except (json.JSONDecodeError, KeyError, ValueError, TypeError):
+        raise RuntimeError(f"invalid or unreadable video file: {video_path}")
 
 
 def _build_broll_concat(
@@ -102,11 +105,18 @@ def _build_broll_concat(
 
         clip_path = os.path.join(work_dir, f"seg_{i:03d}.mp4")
 
-        if seg.filepath and os.path.exists(seg.filepath):
-            _render_ken_burns_clip(
-                seg.filepath, clip_path, seg_duration,
-                output_width, output_height, fps, work_dir, i
-            )
+        if seg.filepath and os.path.exists(seg.filepath) and os.path.getsize(seg.filepath) > 1024:
+            try:
+                _render_ken_burns_clip(
+                    seg.filepath, clip_path, seg_duration,
+                    output_width, output_height, fps, work_dir, i
+                )
+            except Exception as e:
+                print(f"      ⚠️ B-roll clip {i} failed ({e}); using solid color fallback")
+                _render_solid_color_clip(
+                    clip_path, seg_duration, output_width, output_height, fps,
+                    color=(10, 10, 15)
+                )
         else:
             _render_solid_color_clip(
                 clip_path, seg_duration, output_width, output_height, fps,

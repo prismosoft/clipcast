@@ -15,6 +15,8 @@ import urllib.request
 from dataclasses import dataclass, field
 from typing import Optional
 
+from .ssl_ctx import get_ssl_context
+
 
 @dataclass
 class BrollSegment:
@@ -54,7 +56,7 @@ def _search_pexels(
     )
 
     try:
-        with urllib.request.urlopen(req) as response:
+        with urllib.request.urlopen(req, context=get_ssl_context()) as response:
             data = json.load(response)
         return data.get("videos", [])
     except Exception as e:
@@ -155,7 +157,7 @@ def _score_by_gemini_visual(
 
         try:
             req = urllib.request.Request(image_url, headers={"User-Agent": "Mozilla/5.0"})
-            with urllib.request.urlopen(req, timeout=10) as resp:
+            with urllib.request.urlopen(req, timeout=10, context=get_ssl_context()) as resp:
                 img_data = resp.read()
 
             image_parts.append(gtypes.Part.from_bytes(data=img_data, mime_type="image/jpeg"))

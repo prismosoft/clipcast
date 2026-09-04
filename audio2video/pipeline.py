@@ -34,7 +34,7 @@ def _load_studio_module(file_name: str, module_alias: str):
     return module
 
 
-from clipping.engine import transcribe_video, _generate_json_with_retry
+from clipping.engine import transcribe_video, transcribe_video_groq, _generate_json_with_retry
 _broll_mod = _load_studio_module("broll.py", "clipcast_broll")
 download_pexels_broll = _broll_mod.download_pexels_broll
 crop_center_broll = _broll_mod.crop_center_broll
@@ -64,11 +64,29 @@ def transcribe_audio(
     compute_type: str = "int8",
 ) -> tuple[str, list[dict]]:
     """
-    Transcribe an audio file using Faster-Whisper.
-    Reuses the same transcribe_video function from clipping.engine,
-    which accepts any media path (audio or video).
+    Transcribe an audio file.
+
+    Order of preference:
+    1. Groq API (if GROQ_API_KEY is set in environment) — fast cloud faster-whisper
+    2. Local Faster-Whisper (CPU/CUDA) — fallback
+
+    Both paths return the exact same (transkrip_lengkap, data_segmen) structure.
     """
-    print("[1/4] Transcribing audio with Faster-Whisper...")
+    groq_api_key = os.environ.get("GROQ_API_KEY", "")
+
+    if groq_api_key:
+        print("[1/4] Transcribing via Groq API (cloud faster-whisper)...")
+        try:
+            return transcribe_video_groq(
+                audio_path,
+                max_words_per_subtitle=max_words_per_subtitle,
+                api_key=groq_api_key,
+                model_size=model_size,
+            )
+        except Exception as groq_err:
+            print(f"   ⚠️ Groq API failed ({groq_err}). Falling back to local Whisper...")
+
+    print("[1/4] Transcribing audio with Faster-Whisper (local)...")
     return transcribe_video(
         audio_path,
         max_words_per_subtitle=max_words_per_subtitle,
@@ -228,14 +246,35 @@ def download_pexels_broll_from_url(url: str, output_filename: str) -> bool:
     import urllib.request
     import shutil
 
+    from .ssl_ctx import get_ssl_context
+
     try:
         temp_path = output_filename + ".part"
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req) as response, open(temp_path, "wb") as f:
+        with urllib.request.urlopen(req, context=get_ssl_context()) as response, open(temp_path, "wb") as f:
             shutil.copyfileobj(response, f)
+        if not os.path.exists(temp_path) or os.path.getsize(temp_path) < 1024:
+            raise RuntimeError(f"downloaded file too small ({os.path.getsize(temp_path) if os.path.exists(temp_path) else 0} bytes)")
+        # Verify the file is a readable video via ffprobe
+        probe = subprocess.run(
+            ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", temp_path],
+            capture_output=True, text=True,
+        )
+        probe_ok = False
+        try:
+            json.loads(probe.stdout).get("format", {}).get("duration")
+            probe_ok = True
+        except Exception:
+            probe_ok = False
+        if not probe_ok:
+            raise RuntimeError("downloaded file is not a readable video (ffprobe failed)")
         os.replace(temp_path, output_filename)
         return True
     except Exception as e:
+        if os.path.exists(output_filename + ".part"):
+            os.remove(output_filename + ".part")
+        if os.path.exists(output_filename):
+            os.remove(output_filename)
         print(f"   ⚠️ Download error: {e}")
         return False
 

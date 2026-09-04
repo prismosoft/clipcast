@@ -424,6 +424,116 @@ def transcribe_video(
 
 
 # ==============================================================================
+# TAHAP 2B: TRANSCRIPSI VIA GROQ API (faster-whisper large-v3 di cloud)
+# ==============================================================================
+
+# Mapping model size lokal → nama model Groq API
+_GROQ_MODEL_MAP = {
+    "large-v3": "whisper-large-v3",
+    "turbo": "whisper-large-v3-turbo",
+    "distil-large-v3": "distil-whisper-large-v3-en",
+}
+
+
+def transcribe_video_groq(
+    media_path: str,
+    max_words_per_subtitle: int = 5,
+    api_key: str | None = None,
+    model_size: str = "large-v3",
+) -> tuple[str, list[dict]]:
+    """
+    Transcribe *media_path* via Groq's hosted faster-whisper API.
+
+    Returns the exact same structure as transcribe_video():
+    (transkrip_lengkap, data_segmen) — word-level segments grouped by
+    *max_words_per_subtitle*.
+    """
+    print("[2/3] Transkripsi via Groq API (faster-whisper cloud)...")
+
+    if not api_key:
+        raise RuntimeError("GROQ_API_KEY tidak ditemukan. Set di .env atau pass via parameter.")
+
+    try:
+        from groq import Groq
+    except ImportError as e:
+        raise RuntimeError(
+            "Package 'groq' belum terinstall. Jalankan: pip install groq"
+        ) from e
+
+    client = Groq(api_key=api_key)
+
+    groq_model = _GROQ_MODEL_MAP.get(model_size, "whisper-large-v3")
+
+    print(f"      🎙️ Model: {groq_model} (Groq cloud)")
+
+    with open(media_path, "rb") as audio_file:
+        response = client.audio.transcriptions.create(
+            model=groq_model,
+            file=audio_file,
+            response_format="verbose_json",
+            timestamp_granularities=["word", "segment"],
+        )
+
+    # --- Build transkrip_lengkap & data_segmen dari verbose_json ---
+    transkrip_lengkap = ""
+    data_segmen: list[dict] = []
+
+    segments = getattr(response, "segments", None) or []
+    for segment in segments:
+        seg_start = segment.get("start") if isinstance(segment, dict) else segment.start
+        seg_end = segment.get("end") if isinstance(segment, dict) else segment.end
+        seg_text = segment.get("text") if isinstance(segment, dict) else segment.text
+        transkrip_lengkap += f"[{seg_start:.1f} - {seg_end:.1f}] {seg_text}\n"
+
+    # Word-level timestamps — same grouping logic as local Whisper
+    words = getattr(response, "words", None) or []
+    flat_words = []
+    for w in words:
+        w_start = w.get("start") if isinstance(w, dict) else w.start
+        w_end = w.get("end") if isinstance(w, dict) else w.end
+        w_word = (w.get("word") if isinstance(w, dict) else w.word) or ""
+        w_word = w_word.strip()
+        if not w_word:
+            continue
+        flat_words.append({"word": w_word, "start": float(w_start), "end": float(w_end)})
+
+    if not flat_words:
+        # Fallback: distribusi kata merata dari segments (tanpa word timestamps)
+        for segment in segments:
+            seg_start = segment.get("start") if isinstance(segment, dict) else segment.start
+            seg_end = segment.get("end") if isinstance(segment, dict) else segment.end
+            seg_text = (segment.get("text") if isinstance(segment, dict) else segment.text) or ""
+            words_in_seg = seg_text.split()
+            if not words_in_seg:
+                continue
+            dur_per_word = (seg_end - seg_start) / len(words_in_seg)
+            for i, w_text in enumerate(words_in_seg):
+                flat_words.append({
+                    "word": w_text,
+                    "start": seg_start + (i * dur_per_word),
+                    "end": seg_start + ((i + 1) * dur_per_word),
+                })
+
+    # Group words into chunks (identical logic to transcribe_video)
+    chunk_words: list[dict] = []
+    chunk_start = 0.0
+    for i, w in enumerate(flat_words):
+        if len(chunk_words) == 0:
+            chunk_start = w["start"]
+        chunk_words.append(w)
+        if len(chunk_words) == max_words_per_subtitle or i == len(flat_words) - 1:
+            data_segmen.append({
+                "start": chunk_start,
+                "end": w["end"],
+                "words": chunk_words,
+            })
+            chunk_words = []
+
+    print(f"      ✅ Groq: {len(data_segmen)} segmen kata dari {len(flat_words)} kata")
+    return transkrip_lengkap, data_segmen
+
+
+# ==============================================================================
 # TAHAP 3: ANALISIS GEMINI AI
 # ==============================================================================
 

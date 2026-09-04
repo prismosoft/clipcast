@@ -22,6 +22,14 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Ensure all HTTPS clients (urllib, httpx/Gemini) use certifi CA certs.
+# Framework Python builds may ship without a configured CA bundle.
+try:
+    import certifi
+    os.environ.setdefault("SSL_CERT_FILE", certifi.where())
+except ImportError:
+    pass
+
 from audio2video.pipeline import run_pipeline
 
 
